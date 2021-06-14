@@ -17,12 +17,12 @@ void ofApp::setup()
 
 	//pos y tamano de las paletas
 	sizePaleta = new ofVec2f(20, 100);
+	posPaletaP1 = new ofVec2f(20, 20);
 	posPaletaP2 = new ofVec2f(ofGetWidth() - 40, 20);
 
 	//valores iniciales de la simulacion
 	posPelota = new ofVec2f(ofGetWidth() / 2, ofGetHeight() / 2);
 	velPelota = new ofVec2f(150, -200);
-
 
 }
 
@@ -50,6 +50,12 @@ void ofApp::update()
 {
 	if (AppState == EState::server)
 	{
+		//calcular el input
+		if (w)
+			posPaletaP1->y -= 10;
+		if (s)
+			posPaletaP1->y += 10;
+
 		//simulacion de movimiento de la pelota
 		posPelota->x += velPelota->x * ofGetLastFrameTime();
 		posPelota->y += velPelota->y * ofGetLastFrameTime();
@@ -79,11 +85,19 @@ void ofApp::update()
 			posPelota->y = ofGetHeight();
 		}
 
-		//limpiar buffer
+		//enviar datos al cliente
+		memset(Buffer, 0, BUFFER_SIZE);
+		//serialización
+		//  [pelotaX,pelotaY,player1.y]
+		sprintf(Buffer, "%f,%f,%f", posPelota->x, posPelota->y, posPaletaP1->y ) ;
+		udpManager.SendAll(Buffer, BUFFER_SIZE);
+
+		//recibir datos enviados por el cliente
 		memset(Buffer, 0, BUFFER_SIZE);
 		if (udpManager.Receive(Buffer, BUFFER_SIZE) > 0)
 		{
-			printf(Buffer);
+			//deserializar la posicion de la paleta del jugador 2
+			posPaletaP2->y = atof(Buffer);
 		}
 	}
 
@@ -95,10 +109,27 @@ void ofApp::update()
 		if (s)
 			posPaletaP2->y += 10;
 
-
+		//serializar y enviar la posicion de la paleta de jugador 2
 		memset(Buffer, 0, BUFFER_SIZE);
-		sprintf(Buffer, "P2: %f \n", posPaletaP2->y);
+		sprintf(Buffer, "%f", posPaletaP2->y);
 		udpManager.Send(Buffer, BUFFER_SIZE);
+		
+		//recibir y deserializar la posicion del P1 y la pelota
+		memset(Buffer, 0, BUFFER_SIZE);
+		if (udpManager.Receive(Buffer, BUFFER_SIZE) > 0)
+		{
+			//deserializar
+			char* valor;
+			valor = strtok(Buffer, ",");
+			//el primer valor corresponde a la x de la pelota
+			posPelota->x = atof(valor);
+			valor = strtok(NULL, ",");
+			//el segundo valor corresponde a la y de la pelota
+			posPelota->y = atof(valor);
+			valor = strtok(NULL, ",");
+			//el tercer valor corresponde a la y del jugador 1
+			posPaletaP1->y = atof(valor);
+		}
 	}
 }
 
@@ -118,6 +149,9 @@ void ofApp::draw()
 		//dibujar pelota
 		ofCircle(posPelota->x, posPelota->y, 20);
 		//dibujar paletas
+		ofSetColor(255, 0, 0);
+		ofDrawRectangle(posPaletaP1->x, posPaletaP1->y, sizePaleta->x, sizePaleta->y);
+		ofSetColor(255, 255, 255);
 		ofDrawRectangle(posPaletaP2->x, posPaletaP2->y, sizePaleta->x, sizePaleta->y);
 	}
 	else if (AppState == EState::server)
@@ -127,7 +161,10 @@ void ofApp::draw()
 		//dibujar pelota
 		ofCircle(posPelota->x, posPelota->y, 20);
 		//dibujar paletas
-		ofDrawRectangle(10, 10, 20, 100);
+		ofSetColor(255, 255, 255);
+		ofDrawRectangle(posPaletaP1->x, posPaletaP1->y, sizePaleta->x, sizePaleta->y);
+		ofSetColor(255, 0, 0);
+		ofDrawRectangle(posPaletaP2->x, posPaletaP2->y, sizePaleta->x, sizePaleta->y);
 	}
 }
 
